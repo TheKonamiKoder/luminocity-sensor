@@ -14,7 +14,7 @@ const uint32_t station_id = 0xaf7c1fe6;
 const char* ssid = "vodafone041107";
 const char* password = "rpJtaXrLx9cLF6pG";
 
-const char* serve_name = "http://luminocity-server/update_sensor";
+const char* server_name = "http://192.168.1.90:5000/update_sensor_value";
 
 const uint8_t light_sensors[LIGHT_SENSORS_SIZE] = {D1, D2, D3};
 
@@ -47,58 +47,68 @@ void setup()
 }
 
 long unsigned int last_time = millis();
+int pin = 0;
 
 void loop() 
 {
 	// Uses multiplexing to read the value of multiple sensors from just analog input pin
-	for (auto &&pin : light_sensors)
+	// Delay added to avoid the  WiFi connection being lost due to overuse of A0
+	if (millis() > (last_time + 1000))
 	{
-		// Delay added to avoid the  WiFi connection being lost due to overuse of A0
-		if (millis() > (last_time + 1000))
-		{		
-			digitalWrite(pin, HIGH);
+		// Loops through all of the pins every second
+		if (pin >= LIGHT_SENSORS_SIZE - 1)
+		{
+			pin = 0;
+		}
+		else
+		{
+			pin++;
+		}
+				
+		
+		digitalWrite(light_sensors[pin], HIGH);
 
-			// The A0 pin returns a value from 0 to 1024 as a 10 bit number
-			// Since the luminocity program shows it as a colour, only an 8 bit
-			// number is required to show the light intensity is required
-			light_intensity = (analogRead(LDR_PIN) / 4) - 1;
+		// The A0 pin returns a value from 0 to 1024 as a 10 bit number
+		// Since the luminocity program shows it as a colour, only an 8 bit
+		// number is required to show the light intensity is required
+		light_intensity = (analogRead(LDR_PIN) / 4) - 1;
 
-			digitalWrite(pin, LOW);
+		digitalWrite(light_sensors[pin], LOW);
 
-			Serial.print("Sensor "); Serial.print(pin); Serial.print(": ");
-			Serial.println(light_intensity);
+		Serial.print("Sensor "); Serial.print(pin); Serial.print(": ");
+		Serial.println(light_intensity);
 
-			String json_data = 
+		String json_data = 
+			"{"
+				"\"station_id\":" + String(station_id) + ","
+				"\"sensor_id\":" + String(pin) + ","
+				"\"type\":" + "0" + ","
+				"\"val\":" + String(light_intensity) + ","
+			"}";
+		
+		Serial.println(json_data);
+
+		if (WiFi.status() == WL_CONNECTED)
+		{
+			WiFiClient client;
+			HTTPClient http;
+
+			http.begin(client, server_name);
+
+			http.addHeader("Content-Type", "application/json");
+
+			http.POST(
 				"{"
 					"\"station_id\":" + String(station_id) + ","
 					"\"sensor_id\":" + String(pin) + ","
 					"\"type\":" + "0" + ","
-					"\"val\":" + String(light_intensity) + ","
-				"}";
-			
-			Serial.println(json_data);
+					"\"val\":" + String(light_intensity) +
+				"}"
+			);
+		}
 
-			last_time = millis();
+		last_time = millis();
+	}		
 
-			// if (WiFi.status() == WL_CONNECTED)
-			// {
-			// 	WiFiClient client;
-			// 	HTTPClient http;
-
-			// 	http.begin(client, serve_name);
-
-			// 	http.addHeader("Content-Type", "application/json");
-
-			// 	http.POST(
-			// 		"{"
-			// 			"\"station_id\":" + String(station_id) + ","
-			// 			"\"sensor_id\":" + String(pin) + ","
-			// 			"\"type\":" + "0" + ","
-			// 			"\"val\":" + String(light_intensity) + ","
-			// 		"}"
-			// 	);
-			// }
-		}		
-	}
 }
 
