@@ -6,10 +6,12 @@
 
 #include <DHT.h>
 
-#define LIGHT_SENSORS_SIZE 3
-#define TEMPERATURE_SENSORS_SIZE 1
+#define LIGHT_SENSORS 2
+#define MOTION_SENSORS 1
+#define DHT11_SENSORS 1
 
 #define LDR_PIN A0
+#define PIR_PIN D3
 #define DHT_PIN D4
 
 #define DHTTYPE DHT11
@@ -21,7 +23,7 @@ const char* password = "rpJtaXrLx9cLF6pG";
 
 const char* server_name = "http://192.168.1.90:5000/update_sensor_value";
 
-const uint8_t light_sensors[LIGHT_SENSORS_SIZE] = {D1, D2, D3};
+const uint8_t light_sensors[LIGHT_SENSORS] = {D1, D2};
 
 uint8_t light_intensity;
 
@@ -53,6 +55,9 @@ void setup()
 	pinMode(LDR_PIN, INPUT);
 
 	dht_sensor.begin();
+
+	pinMode(PIR_PIN, INPUT_PULLUP);
+
 }
 
 long unsigned int last_time = millis();
@@ -64,12 +69,7 @@ void loop()
 	// Delay added to avoid the  WiFi connection being lost due to overuse of A0
 	if (millis() > (last_time + 1000))
 	{
-		// Loops through all of the pins every second
-		if (pin >= LIGHT_SENSORS_SIZE - 1)
-		{
-			pin = -1;	// Go to the dht11
-		}
-		else if (pin == -1) // Go back to the light sensors 
+		if (pin >= LIGHT_SENSORS + MOTION_SENSORS + DHT11_SENSORS - 1) 
 		{
 			pin = 0;
 		}
@@ -77,14 +77,47 @@ void loop()
 		{
 			pin++;
 		}
+		
+		if (pin < LIGHT_SENSORS)
+		{
+			digitalWrite(light_sensors[pin], HIGH);
 
-		// Get dht11 data
-		if (pin == -1)
+			// The A0 pin returns a value from 0 to 1024 as a 10 bit number
+			// Since the luminocity program shows it as a colour, only an 8 bit
+			// number is required to show the light intensity is required
+			light_intensity = (analogRead(LDR_PIN) / 4) - 1;
+
+			digitalWrite(light_sensors[pin], LOW);
+
+
+			String json_data = 
+				"{"
+					"\"station_id\":" + String(station_id) + ","
+					"\"sensor_id\":" + String(pin) + ","
+					"\"type\":" + "0" + ","
+					"\"val\":" + String(light_intensity) +
+				"}";
+			
+			Serial.print("LIGHT "); Serial.print(json_data); Serial.print("\n");
+
+			if (WiFi.status() == WL_CONNECTED)
+			{
+				WiFiClient client;
+				HTTPClient http;
+
+				http.begin(client, server_name);
+
+				http.addHeader("Content-Type", "application/json");
+
+				http.POST(json_data);
+			}
+		}
+		else if (pin < LIGHT_SENSORS + DHT11_SENSORS)
 		{
 			String json_data = 
 				"{"
 					"\"station_id\":" + String(station_id) + ","
-					"\"sensor_id\":" + "4" + ","
+					"\"sensor_id\":" + "78" + ","
 					"\"type\":" + "1" + ","
 					"\"val\":" + "[" + String(dht_sensor.readTemperature()) + ","
 									 + String(dht_sensor.readHumidity()) + 
@@ -103,30 +136,20 @@ void loop()
 				http.addHeader("Content-Type", "application/json");
 
 				http.POST(json_data);
-			}			
+			}
 		}
-		else {	
-			digitalWrite(light_sensors[pin], HIGH);
-
-			// The A0 pin returns a value from 0 to 1024 as a 10 bit number
-			// Since the luminocity program shows it as a colour, only an 8 bit
-			// number is required to show the light intensity is required
-			light_intensity = (analogRead(LDR_PIN) / 4) - 1;
-
-			digitalWrite(light_sensors[pin], LOW);
-
-			Serial.print("Sensor "); Serial.print(pin); Serial.print(": ");
-			Serial.println(light_intensity);
+		else if (pin < LIGHT_SENSORS + DHT11_SENSORS + MOTION_SENSORS) 
+		{
 
 			String json_data = 
 				"{"
 					"\"station_id\":" + String(station_id) + ","
-					"\"sensor_id\":" + String(pin) + ","
-					"\"type\":" + "0" + ","
-					"\"val\":" + String(light_intensity) +
+					"\"sensor_id\":" + "29" + ","
+					"\"type\":" + "2" + ","
+					"\"val\":" + (digitalRead(PIR_PIN) == LOW ? "true" : "false") +
 				"}";
-			
-			Serial.println(json_data);
+
+			Serial.print("MOTION "); Serial.print(json_data); Serial.print("\n");
 
 			if (WiFi.status() == WL_CONNECTED)
 			{
@@ -137,17 +160,10 @@ void loop()
 
 				http.addHeader("Content-Type", "application/json");
 
-				http.POST(
-					"{"
-						"\"station_id\":" + String(station_id) + ","
-						"\"sensor_id\":" + String(pin) + ","
-						"\"type\":" + "0" + ","
-						"\"val\":" + String(light_intensity) +
-					"}"
-				);
+				http.POST(json_data);
 			}
 		}
-
+		
 		last_time = millis();
 	}		
 }
