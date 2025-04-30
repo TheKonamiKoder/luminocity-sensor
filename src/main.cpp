@@ -16,12 +16,12 @@
 
 #define DHTTYPE DHT11
 
-const uint32_t station_id = 0xaf7c1fe6;
+const uint32_t station_id = 0xaf7c1fe6; // Arbritrary number. Should make this randomly generated in the future. Could be stored in EEPROM.
 
-const char* ssid = "vodafone041107";
-const char* password = "rpJtaXrLx9cLF6pG";
+const char* ssid = "*************";
+const char* password = "**************";
 
-const char* server_name = "http://192.168.1.90:5000/update_sensor_value";
+const char* server_name = "***********************";
 
 const uint8_t light_sensors[LIGHT_SENSORS] = {D1, D2};
 
